@@ -1,0 +1,73 @@
+#version: "3.9"
+services:
+  app:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    image: svhd/logto:${TAG-latest}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "1"
+    entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
+    ports:
+      - 3001:3001
+      - 3002:3002
+    environment:
+      - TRUST_PROXY_HEADER=1
+      - DB_URL=postgres://postgres:p0stgr3s@postgres:5432/logto
+      # Mandatory for GitPod to map host env to the container, thus GitPod can dynamically configure the public URL of Logto;
+      # Or, you can leverage it for local testing.
+      - ENDPOINT
+      - ADMIN_ENDPOINT
+      - REDIS_URL=redis://redis
+  postgres:
+    image: postgres:17-alpine
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "1"
+    user: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: p0stgr3s
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: docker.m.daocloud.io/redis:latest
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "1"
+    restart: always
+    command: redis-server --save 900 1
+    volumes:
+      - redis-data:/data
+
+  cleaner:
+    image: logto.cleaner:latest
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "1"
+    restart: always
+    environment:
+      - DB_HOST=postgres
+      - DB_USER=postgres
+      - DB_PASS=p0stgr3s
+      - DB_NAME=logto
+      - DB_PORT=5432
+
+volumes:
+  db-data:
+  redis-data:
